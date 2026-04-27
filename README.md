@@ -10,28 +10,29 @@ QQ 音乐 API 文档和测试仓库。
 
 ## 当前支持接口
 
-- `search-songs`: 搜索歌曲
-- `search-singers`: 搜索歌手
-- `singer-info`: 获取歌手信息
-- `singer-songs`: 获取歌手歌曲列表
-- `song-url`: 获取歌曲播放链接
-- `song-detail`: 获取歌曲详情
-- `lyric`: 获取歌词
-- `recommend-playlists`: 获取推荐歌单
-- `playlist-detail`: 获取歌单详情
-- `rank-lists`: 获取排行榜列表
-- `rank-detail`: 获取排行榜详情
-- `qq-login-qr`: 获取 QQ 扫码登录二维码
-- `wx-login-qr`: 获取微信扫码登录二维码
-- `check-login`: 轮询扫码登录状态
-- `euin`: 获取加密 uin
-- `user-info`: 获取当前登录用户信息
-- `my-favorite`: 获取“我喜欢”的歌曲
-- `my-playlists`: 获取我的歌单列表
-- `add-songs`: 添加歌曲到歌单
-- `remove-songs`: 从歌单删除歌曲
-- `radar-recommend`: 获取雷达推荐
-- `guess-recommend`: 获取猜你喜欢
+- [search-songs 搜索歌曲](docs/apis/search-songs.md)
+- [search-singers 搜索歌手](docs/apis/search-singers.md)
+- [singer-info 获取歌手信息](docs/apis/get-singer-info.md)
+- [singer-songs 获取歌手歌曲列表](docs/apis/get-singer-songs.md)
+- [song-url 获取歌曲播放链接](docs/apis/get-song-url.md)
+- [song-detail 获取歌曲详情](docs/apis/get-song-detail.md)
+- [lyric 获取歌词](docs/apis/get-lyric.md)
+- [recommend-playlists 获取推荐歌单](docs/apis/get-recommend-playlists.md)
+- [playlist-detail 获取歌单详情](docs/apis/get-playlist-detail.md)
+- [rank-lists 获取排行榜列表](docs/apis/get-rank-lists.md)
+- [rank-detail 获取排行榜详情](docs/apis/get-rank-detail.md)
+- [wx-login 微信扫码登录并返回 musicid/musickey](docs/apis/wx-login.md)
+- [qq-login-qr 获取 QQ 扫码登录二维码](docs/apis/get-qq-login-qr.md)
+- [wx-login-qr 获取微信扫码登录二维码](docs/apis/get-wx-login-qr.md)
+- [check-login 轮询扫码登录状态](docs/apis/check-login-status.md)
+- [euin 获取加密 uin](docs/apis/get-euin.md)
+- [user-info 获取当前登录用户信息](docs/apis/get-user-info.md)
+- [my-favorite 获取“我喜欢”的歌曲](docs/apis/get-my-favorite.md)
+- [my-playlists 获取我的歌单列表](docs/apis/get-my-playlists.md)
+- [add-songs 添加歌曲到歌单](docs/apis/add-songs-to-playlist.md)
+- [remove-songs 从歌单删除歌曲](docs/apis/remove-songs-from-playlist.md)
+- [radar-recommend 获取雷达推荐](docs/apis/get-radar-recommend.md)
+- [guess-recommend 获取猜你喜欢](docs/apis/get-guess-recommend.md)
 
 ## 凭据
 
@@ -46,20 +47,17 @@ $env:QQMUSIC_MUSICKEY="你的 musickey"
 
 ## 扫码登录
 
-支持 QQ 和微信扫码登录。流程是先获取二维码，再轮询登录状态；扫码成功后，接口返回的 `userInfo` 里会包含 `musicid` 和 `musickey`，之后可以把它们设置为环境变量调用用户相关接口。
-
-QQ 扫码：
+支持微信扫码登录。脚本会保存并打开二维码图片，扫码确认后自动轮询并输出 `userInfo.musicid` 和 `userInfo.musickey`，之后可以把它们设置为环境变量调用用户相关接口。
 
 ```powershell
-python tests/qqmusic_api_test.py qq-login-qr
-python tests/qqmusic_api_test.py check-login --type qq --identifier "上一步返回的 identifier"
+python tests/qqmusic_api_test.py wx-login
 ```
 
-微信扫码：
+只获取二维码，不自动轮询：
 
 ```powershell
 python tests/qqmusic_api_test.py wx-login-qr
-python tests/qqmusic_api_test.py check-login --type wx --identifier "上一步返回的 identifier"
+python tests/qqmusic_api_test.py qq-login-qr
 ```
 
 拿到凭据后：

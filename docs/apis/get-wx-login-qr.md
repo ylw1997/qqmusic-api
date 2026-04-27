@@ -18,8 +18,12 @@
 
 ```json
 {
-  "data": "data:image/jpeg;base64,...",
   "identifier": "uuid",
-  "type": "wx"
+  "type": "wx",
+  "image_path": "responses/wx-login-qr.jpg",
+  "opened": true,
+  "image_base64_prefix": "/9j/4AAQSk..."
 }
 ```
+
+脚本命令 `python tests/qqmusic_api_test.py wx-login-qr` 会把二维码保存成图片，方便直接扫码。

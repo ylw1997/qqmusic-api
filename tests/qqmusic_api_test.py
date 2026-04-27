@@ -6,8 +6,10 @@ import os
 import random
 import re
 import string
+import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -18,10 +20,34 @@ VERSION_CODE = 13020508
 DEFAULT_SONG_MID = "0039MnYb0qxYhV"
 DEFAULT_SINGER_MID = "0025NhlN2yWrP4"
 DEFAULT_TOP_ID = 4
+REPO_ROOT = Path(__file__).resolve().parents[1]
+RESPONSES_DIR = REPO_ROOT / "responses"
 
 
 def print_json(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2)[:8000])
+
+
+def save_response_file(name: str, content: bytes) -> Path:
+    RESPONSES_DIR.mkdir(exist_ok=True)
+    path = RESPONSES_DIR / name
+    path.write_bytes(content)
+    return path
+
+
+def open_response_file(path: Path) -> bool:
+    if os.getenv("QQMUSIC_NO_OPEN") == "1":
+        return False
+    try:
+        if os.name == "nt":
+            os.startfile(str(path))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
+        return True
+    except Exception:
+        return False
 
 
 def guid() -> str:
@@ -271,7 +297,7 @@ class QQMusicClient:
             self.credential,
         )
 
-    def qq_login_qr(self) -> Any:
+    def qq_login_qr(self, open_image: bool = False) -> Any:
         response = self.session.get(
             "https://ssl.ptlogin2.qq.com/ptqrshow",
             params={
@@ -294,13 +320,16 @@ class QQMusicClient:
             if match:
                 qrsig = match.group(1)
                 break
+        image_path = save_response_file("qq-login-qr.png", response.content)
         return {
             "identifier": qrsig,
             "type": "qq",
+            "image_path": str(image_path),
+            "opened": open_response_file(image_path) if open_image else False,
             "image_base64_prefix": base64.b64encode(response.content).decode("ascii")[:60],
         }
 
-    def wx_login_qr(self) -> Any:
+    def wx_login_qr(self, open_image: bool = False) -> Any:
         response = self.session.get(
             "https://open.weixin.qq.com/connect/qrconnect",
             params={
@@ -325,7 +354,14 @@ class QQMusicClient:
             timeout=30,
         )
         qr.raise_for_status()
-        return {"identifier": uuid, "type": "wx", "image_base64_prefix": base64.b64encode(qr.content).decode("ascii")[:60]}
+        image_path = save_response_file("wx-login-qr.jpg", qr.content)
+        return {
+            "identifier": uuid,
+            "type": "wx",
+            "image_path": str(image_path),
+            "opened": open_response_file(image_path) if open_image else False,
+            "image_base64_prefix": base64.b64encode(qr.content).decode("ascii")[:60],
+        }
 
     def check_login_status(self, identifier: str, login_type: str) -> Any:
         if login_type == "qq":
@@ -360,6 +396,58 @@ class QQMusicClient:
             timeout=35,
         )
         return {"status_code": response.status_code, "raw": response.text}
+
+    def authorize_wx_code(self, wx_code: str) -> Any:
+        body = {
+            "comm": {**common_params(None), "tmeLoginType": "1"},
+            "music.login.LoginServer.Login": {
+                "module": "music.login.LoginServer",
+                "method": "Login",
+                "param": {
+                    "code": wx_code,
+                    "strAppid": "wx48db31d50e334801",
+                },
+            },
+        }
+        response = self.session.post(BASE_URL, json=body, headers=headers(), timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        login = data.get("music.login.LoginServer.Login", {})
+        if login.get("code") not in (0, None):
+            raise RuntimeError(login.get("msg") or f"login code={login.get('code')}")
+        user = login.get("data", {})
+        return {
+            "musicid": str(user.get("str_musicid") or user.get("musicid") or user.get("uin") or ""),
+            "musickey": user.get("musickey") or user.get("music_key") or "",
+            "refresh_key": user.get("refresh_key") or "",
+            "refresh_token": user.get("refresh_token") or "",
+            "nickname": user.get("nick") or user.get("nickname") or "",
+            "avatar": user.get("headurl") or user.get("avatar") or "",
+            "raw": user,
+        }
+
+    def wx_login(self, timeout: int = 180, interval: int = 2, open_image: bool = True) -> Any:
+        qr = self.wx_login_qr(open_image=open_image)
+        deadline = time.time() + timeout
+        last_status: dict[str, Any] | None = None
+        while time.time() < deadline:
+            status = self.check_login_status(qr["identifier"], "wx")
+            raw = status.get("raw", "")
+            errcode_match = re.search(r"window\.wx_errcode=(\d+);", raw)
+            wx_code_match = re.search(r"window\.wx_code='([^']*)';", raw)
+            errcode = errcode_match.group(1) if errcode_match else ""
+            last_status = {"errcode": errcode, "raw": raw}
+            if errcode == "405" and wx_code_match:
+                user_info = self.authorize_wx_code(wx_code_match.group(1))
+                return {"status": "success", "qr": qr, "userInfo": user_info}
+            if errcode == "404":
+                last_status["status"] = "scanning"
+            elif errcode == "403":
+                return {"status": "failed", "qr": qr, "last": last_status}
+            else:
+                last_status["status"] = "pending"
+            time.sleep(interval)
+        return {"status": "timeout", "qr": qr, "last": last_status}
 
     def euin(self, musicid: str) -> Any:
         response = self.session.get(
@@ -540,8 +628,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--page", type=int, default=1)
     p.add_argument("--num", type=int, default=30)
 
-    sub.add_parser("qq-login-qr")
-    sub.add_parser("wx-login-qr")
+    p = sub.add_parser("qq-login-qr")
+    p.add_argument("--no-open", action="store_true")
+    p = sub.add_parser("wx-login-qr")
+    p.add_argument("--no-open", action="store_true")
+    p = sub.add_parser("wx-login")
+    p.add_argument("--timeout", type=int, default=180)
+    p.add_argument("--interval", type=int, default=2)
+    p.add_argument("--no-open", action="store_true")
     p = sub.add_parser("check-login")
     p.add_argument("--identifier", required=True)
     p.add_argument("--type", choices=["qq", "wx"], required=True)
@@ -678,9 +772,11 @@ def main() -> int:
     elif cmd == "rank-detail":
         print_json(client.rank_detail(args.top_id, args.page, args.num))
     elif cmd == "qq-login-qr":
-        print_json(client.qq_login_qr())
+        print_json(client.qq_login_qr(open_image=not args.no_open))
     elif cmd == "wx-login-qr":
-        print_json(client.wx_login_qr())
+        print_json(client.wx_login_qr(open_image=not args.no_open))
+    elif cmd == "wx-login":
+        print_json(client.wx_login(args.timeout, args.interval, open_image=not args.no_open))
     elif cmd == "check-login":
         print_json(client.check_login_status(args.identifier, args.type))
     elif cmd == "euin":

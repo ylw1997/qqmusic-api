@@ -21,6 +21,7 @@
 - [getPlaylistDetail 歌单详情](apis/get-playlist-detail.md)
 - [getRankLists 排行榜列表](apis/get-rank-lists.md)
 - [getRankDetail 排行榜详情](apis/get-rank-detail.md)
+- [wxLogin 微信扫码登录并返回凭据](apis/wx-login.md)
 - [getQQLoginQR 获取 QQ 登录二维码](apis/get-qq-login-qr.md)
 - [getWXLoginQR 获取微信登录二维码](apis/get-wx-login-qr.md)
 - [checkLoginStatus 检查登录状态](apis/check-login-status.md)

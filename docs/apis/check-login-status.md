@@ -28,12 +28,23 @@
 
 ## 返回数据
 
+单独检查状态时返回原始轮询结果：
+
 ```json
 {
-  "status": "pending | scanning | success | failed | timeout",
+  "status_code": 200,
+  "raw": "window.wx_errcode=408;..."
+}
+```
+
+完整微信扫码登录请使用 [wxLogin](wx-login.md)，成功后会返回：
+
+```json
+{
+  "status": "success",
   "userInfo": {
-    "musicid": "",
-    "musickey": "",
+    "musicid": "123456",
+    "musickey": "W_X...",
     "nickname": ""
   }
 }
